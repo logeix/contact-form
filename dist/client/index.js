@@ -44,9 +44,16 @@ function collectAuxNames(form) {
     if (!(el instanceof HTMLInputElement) && !(el instanceof HTMLTextAreaElement)) return;
     if (!el.name) return;
     names.push(el.name);
+    if (el instanceof HTMLInputElement && (el.type === "email" || el.type === "tel")) {
+      el.type = "text";
+    }
     el.setAttribute("tabindex", "-1");
-    el.setAttribute("autocomplete", "off");
+    el.setAttribute("autocomplete", "lgx-aux");
     el.setAttribute("aria-hidden", "true");
+    el.setAttribute("readonly", "");
+    el.addEventListener("focus", () => {
+      el.removeAttribute("readonly");
+    });
     el.style.cssText += HIDE_STYLE;
     const row = el.closest(`[${AUX_ROW_ATTR}]`);
     if (row instanceof HTMLElement) {

@@ -56,17 +56,19 @@ test("uniqueFieldNames de-dupes case-insensitively", () => {
 test("aux names merge defaults, extras, and form_build", () => {
   const names = auxFieldNames(
     { form_build: "1~company_fax" },
-    ["website"],
+    ["skype_id"],
   );
+  assert.ok(names.includes("website"));
   assert.ok(names.includes("confirm_email"));
   assert.ok(names.includes("bot-field"));
-  assert.ok(names.includes("website"));
+  assert.ok(names.includes("skype_id"));
   assert.ok(names.includes("company_fax"));
 });
 
 test("filled aux field is detected; blank is not", () => {
+  assert.equal(auxFieldFilled({ website: "https://spam.example" }, ["website"]), true);
+  assert.equal(auxFieldFilled({ website: "  " }, ["website"]), false);
   assert.equal(auxFieldFilled({ confirm_email: "bot@x.com" }, ["confirm_email"]), true);
-  assert.equal(auxFieldFilled({ confirm_email: "  " }, ["confirm_email"]), false);
 });
 
 test("stripMetaFields drops timestamp, form_build, and aux names", () => {

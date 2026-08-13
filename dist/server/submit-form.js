@@ -2,7 +2,7 @@
 var FORM_BUILD_FIELD = "form_build";
 var TIMESTAMP_FIELD = "submitted_at_client";
 var FORM_NAME_FIELD = "form-name";
-var DEFAULT_AUX_FIELDS = ["confirm_email", "bot-field"];
+var DEFAULT_AUX_FIELDS = ["website", "confirm_email", "bot-field"];
 function parseFormBuild(raw) {
   if (!raw) return [];
   const tilde = raw.indexOf("~");

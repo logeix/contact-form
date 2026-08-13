@@ -9,7 +9,7 @@ This is a sibling of [`@logeix/phone-intent`](https://github.com/logeix/phone-in
 ## Install
 
 ```json
-"@logeix/contact-form": "^1.0.1"
+"@logeix/contact-form": "^1.0.2"
 ```
 
 ```bash
@@ -21,7 +21,7 @@ Same npm org as [`@logeix/phone-intent`](https://www.npmjs.com/package/@logeix/p
 GitHub tarball still works if a CI job cannot hit npm:
 
 ```json
-"@logeix/contact-form": "https://github.com/logeix/contact-form/archive/refs/tags/v1.0.1.tar.gz"
+"@logeix/contact-form": "https://github.com/logeix/contact-form/archive/refs/tags/v1.0.2.tar.gz"
 ```
 
 ## Site setup
@@ -69,8 +69,10 @@ Tag the form and any decoy fields. **Do not** name fields or attributes `honeypo
 | Attribute | Where | What it does |
 |-----------|--------|----------------|
 | `data-lgx-lead` | `<form>` | Client binds timestamp, aux fields, fetch POST |
-| `data-lgx-aux` | decoy `<input>` | Hidden; any value → block. Name should look real (`confirm_email`) |
+| `data-lgx-aux` | decoy `<input>` | Hidden; any value → block. Use `type="text"` named `website` — **not** email |
 | `data-lgx-aux-row` | optional wrapper | Whole row is clipped off-screen |
+
+Put the decoy **after** the real fields so Chrome autofill hits name/phone/email first. Do not use `type="email"` or a name containing `email` — browsers dump the profile address into the first email-ish control and leave the visible one empty.
 
 ```html
 <form name="contact" method="POST" action="/api/submit-form" data-lgx-lead>
@@ -78,18 +80,22 @@ Tag the form and any decoy fields. **Do not** name fields or attributes `honeypo
   <input type="hidden" name="submitted_at_client" value="" />
   <input type="hidden" name="source" value="" />
 
+  <!-- real fields: name, phone, email, message, … -->
+
   <div data-lgx-aux-row>
-    <label for="confirm_email">Please leave this field blank</label>
-    <input id="confirm_email" name="confirm_email" type="email" data-lgx-aux />
+    <label>Website
+      <input name="website" type="text" data-lgx-aux autocomplete="lgx-aux" tabindex="-1" readonly />
+    </label>
   </div>
 
-  <!-- real fields: name, phone, email, message, … -->
   <button type="submit" class="submit-btn">Send</button>
   <p class="status-message"></p>
 </form>
 ```
 
-Default aux names the **server** always checks (even without JS): `confirm_email`, `bot-field`. Tagged names are sent in a boring meta field `form_build` so extra decoys work without listing them in the handler.
+The client bind forces `autocomplete="lgx-aux"` (Chrome ignores `off` on contact fields) and `readonly` until focus, so profile autofill skips the decoy. Bots that POST HTML still send a value.
+
+Default aux names the **server** always checks (even without JS): `website`, `confirm_email` (legacy), `bot-field`. Tagged names are sent in a boring meta field `form_build` so extra decoys work without listing them in the handler.
 
 ### 4. Client init
 
@@ -148,9 +154,9 @@ Runs in order. Immediate block → `score: 100`. Blocked rows still insert to D1
 
 1. Bump `version` in `package.json`
 2. `npm test` && `npm run build`
-3. Commit, tag (`git tag v1.0.1`), push tag
+3. Commit, tag (`git tag v1.0.2`), push tag
 4. `npm publish --access public`
-5. Update client sites to `"@logeix/contact-form": "^1.0.1"`
+5. Update client sites to `"@logeix/contact-form": "^1.0.2"`
 
 ## Debug
 

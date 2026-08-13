@@ -16,8 +16,12 @@ export const TIMESTAMP_FIELD = "submitted_at_client";
 export const FORM_NAME_FIELD = "form-name";
 export const SOURCE_FIELD = "source";
 
-/** Always treated as aux fields, even if the client never tags them. */
-export const DEFAULT_AUX_FIELDS = ["confirm_email", "bot-field"] as const;
+/**
+ * Always treated as aux fields, even if the client never tags them.
+ * `website` is the live decoy (plain text — Chrome will not treat it as an email).
+ * `confirm_email` is kept so older POSTs still get stripped/blocked.
+ */
+export const DEFAULT_AUX_FIELDS = ["website", "confirm_email", "bot-field"] as const;
 
 export const FORM_BUILD_VERSION = "1";
 

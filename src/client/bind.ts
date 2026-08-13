@@ -41,9 +41,18 @@ function collectAuxNames(form: HTMLFormElement): string[] {
     if (!(el instanceof HTMLInputElement) && !(el instanceof HTMLTextAreaElement)) return;
     if (!el.name) return;
     names.push(el.name);
+    // Chrome ignores autocomplete=off on email-ish fields. A nonsense token
+    // plus readonly (until focus) keeps profile autofill off the decoy.
+    if (el instanceof HTMLInputElement && (el.type === "email" || el.type === "tel")) {
+      el.type = "text";
+    }
     el.setAttribute("tabindex", "-1");
-    el.setAttribute("autocomplete", "off");
+    el.setAttribute("autocomplete", "lgx-aux");
     el.setAttribute("aria-hidden", "true");
+    el.setAttribute("readonly", "");
+    el.addEventListener("focus", () => {
+      el.removeAttribute("readonly");
+    });
     el.style.cssText += HIDE_STYLE;
     const row = el.closest(`[${AUX_ROW_ATTR}]`);
     if (row instanceof HTMLElement) {
