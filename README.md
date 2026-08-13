@@ -8,17 +8,21 @@ This is a sibling of [`@logeix/phone-intent`](https://github.com/logeix/phone-in
 
 ## Install
 
-**Public GitHub release tarball — no PAT, no `.npmrc`, no git/SSH:**
-
 ```json
-"@logeix/contact-form": "https://github.com/logeix/contact-form/archive/refs/tags/v1.0.0.tar.gz"
+"@logeix/contact-form": "^1.0.0"
 ```
 
 ```bash
 npm install
 ```
 
-Bump the tag URL when releasing (e.g. `v1.0.1`).
+Same npm org as [`@logeix/phone-intent`](https://www.npmjs.com/package/@logeix/phone-intent). Public, unlisted-by-search unless you know the name.
+
+GitHub tarball still works if a CI job cannot hit npm:
+
+```json
+"@logeix/contact-form": "https://github.com/logeix/contact-form/archive/refs/tags/v1.0.0.tar.gz"
+```
 
 ## Site setup
 
@@ -141,9 +145,10 @@ Runs in order. Immediate block → `score: 100`. Blocked rows still insert to D1
 ## Publish (maintainers)
 
 1. Bump `version` in `package.json`
-2. `npm run build` (updates committed `dist/`)
+2. `npm test` && `npm run build`
 3. Commit, tag (`git tag v1.0.1`), push tag
-4. Update client sites to the new tarball URL
+4. `npm publish --access public`
+5. Update client sites to `"@logeix/contact-form": "^1.0.1"`
 
 ## Debug
 
