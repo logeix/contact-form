@@ -1,0 +1,52 @@
+{
+  "name": "@logeix/contact-form",
+  "version": "1.0.0",
+  "description": "Contact form intake for LOGEIX Astro + Cloudflare Pages sites (D1 + Brevo + spam gates)",
+  "type": "module",
+  "license": "MIT",
+  "private": false,
+  "publishConfig": {
+    "access": "public"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/logeix/contact-form.git"
+  },
+  "files": [
+    "dist",
+    "migrations",
+    "README.md"
+  ],
+  "exports": {
+    ".": {
+      "types": "./dist/client/index.d.ts",
+      "import": "./dist/client/index.js"
+    },
+    "./client": {
+      "types": "./dist/client/index.d.ts",
+      "import": "./dist/client/index.js"
+    },
+    "./server/submit-form": {
+      "types": "./dist/server/submit-form.d.ts",
+      "import": "./dist/server/submit-form.js"
+    },
+    "./migrations/*": "./migrations/*"
+  },
+  "scripts": {
+    "build": "tsup",
+    "prepublishOnly": "npm run build"
+  },
+  "devDependencies": {
+    "@cloudflare/workers-types": "^4.20260410.1",
+    "tsup": "^8.5.0",
+    "typescript": "^5.9.3"
+  },
+  "peerDependencies": {
+    "@cloudflare/workers-types": "^4.0.0"
+  },
+  "peerDependenciesMeta": {
+    "@cloudflare/workers-types": {
+      "optional": true
+    }
+  }
+}
