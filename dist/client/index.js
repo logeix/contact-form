@@ -99,6 +99,7 @@ function bindContactForm(form, options = {}) {
       const data = await response.json();
       if (response.ok && data.success) {
         debugLog(debug, "ok \u2192", thankYouPath);
+        options.onSuccess?.();
         form.reset();
         window.location.href = thankYouPath;
         return;

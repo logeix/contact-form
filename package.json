@@ -1,6 +1,6 @@
 {
   "name": "@logeix/contact-form",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "description": "Contact form intake for LOGEIX Astro + Cloudflare Pages sites (D1 + Brevo + spam gates)",
   "type": "module",
   "license": "MIT",

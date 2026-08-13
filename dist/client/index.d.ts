@@ -4,6 +4,8 @@ interface BindContactFormOptions {
     /** Verbose console logs. Default true. */
     debug?: boolean;
     errorMessage?: string;
+    /** Runs after a successful POST, before the thank-you redirect. */
+    onSuccess?: () => void;
 }
 declare function bindContactForm(form: HTMLFormElement, options?: BindContactFormOptions): void;
 /** Bind every `form[data-lgx-lead]` on the page. */

@@ -148,7 +148,10 @@ var HARD_SPAM_TERMS = [
   "buying plumbing businesses",
   "buying businesses in your industry",
   "quantity takeoff",
-  "stop to opt out"
+  "stop to opt out",
+  "seo opportunities",
+  "electrical estimating",
+  "project estimator"
 ];
 var SCORE_SPAM_TERMS = [
   "search results",
@@ -196,12 +199,17 @@ var SCORE_SPAM_TERMS = [
   "vas 4 hire",
   "vas4hire",
   "takeoff services",
-  "senior estimator"
+  "senior estimator",
+  "hope you re doing well",
+  "reaching out here",
+  "tried emailing but",
+  "office side of the business",
+  "best regards"
 ];
 
 // src/server/spam.ts
 var DEFAULT_MIN_FILL_MS = 3e3;
-var DEFAULT_BLOCK_SCORE = 4;
+var DEFAULT_BLOCK_SCORE = 3;
 function auxFieldNames(formData, extra) {
   return uniqueFieldNames([
     ...DEFAULT_AUX_FIELDS,

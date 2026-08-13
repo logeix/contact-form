@@ -65,6 +65,9 @@ export const HARD_SPAM_TERMS: readonly string[] = [
   "buying businesses in your industry",
   "quantity takeoff",
   "stop to opt out",
+  "seo opportunities",
+  "electrical estimating",
+  "project estimator",
 ];
 
 export const SCORE_SPAM_TERMS: readonly string[] = [
@@ -114,4 +117,9 @@ export const SCORE_SPAM_TERMS: readonly string[] = [
   "vas4hire",
   "takeoff services",
   "senior estimator",
+  "hope you re doing well",
+  "reaching out here",
+  "tried emailing but",
+  "office side of the business",
+  "best regards",
 ];

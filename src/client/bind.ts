@@ -14,6 +14,8 @@ export interface BindContactFormOptions {
   /** Verbose console logs. Default true. */
   debug?: boolean;
   errorMessage?: string;
+  /** Runs after a successful POST, before the thank-you redirect. */
+  onSuccess?: () => void;
 }
 
 const HIDE_STYLE =
@@ -108,6 +110,7 @@ export function bindContactForm(
 
       if (response.ok && data.success) {
         debugLog(debug, "ok →", thankYouPath);
+        options.onSuccess?.();
         form.reset();
         window.location.href = thankYouPath;
         return;

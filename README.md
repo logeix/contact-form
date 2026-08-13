@@ -9,7 +9,7 @@ This is a sibling of [`@logeix/phone-intent`](https://github.com/logeix/phone-in
 ## Install
 
 ```json
-"@logeix/contact-form": "^1.0.0"
+"@logeix/contact-form": "^1.0.1"
 ```
 
 ```bash
@@ -21,7 +21,7 @@ Same npm org as [`@logeix/phone-intent`](https://www.npmjs.com/package/@logeix/p
 GitHub tarball still works if a CI job cannot hit npm:
 
 ```json
-"@logeix/contact-form": "https://github.com/logeix/contact-form/archive/refs/tags/v1.0.0.tar.gz"
+"@logeix/contact-form": "https://github.com/logeix/contact-form/archive/refs/tags/v1.0.1.tar.gz"
 ```
 
 ## Site setup
@@ -106,6 +106,8 @@ In the page/component script (same pattern as phone-intent):
 
 `debug` defaults to **true** (verbose `[lgx-contact-form]` logs). Set `{ debug: false }` in production if it is noisy.
 
+Optional `onSuccess` runs after a successful POST, before the thank-you redirect (e.g. dispatch a conversion event).
+
 Keep site-specific JS (service dropdown from `?service=`, scroll-to-book) in the Astro file. Do not also attach a second submit handler.
 
 ## Handler options
@@ -123,7 +125,7 @@ Hardcoded defaults, then per-site overrides:
 | `assessFormNames` | `["contact"]` | Full scoring |
 | `gateFormNames` | `[]` | Timing + aux only |
 | `minFillMs` | `3000` | Fill-time gate (negative elapsed also blocks) |
-| `blockScoreAt` | `4` | Accumulated score threshold |
+| `blockScoreAt` | `3` | Accumulated score threshold |
 | `debug` | `true` | Server `console.log` |
 | `sender` | LOGEIX / noreply@logeix.com | Brevo from |
 

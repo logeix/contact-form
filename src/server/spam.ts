@@ -12,7 +12,7 @@ import { HARD_SPAM_TERMS, SCORE_SPAM_TERMS } from "./terms";
 import type { PhoneLocale, SpamAssessment, SubmitFormOptions } from "./types";
 
 const DEFAULT_MIN_FILL_MS = 3000;
-const DEFAULT_BLOCK_SCORE = 4;
+const DEFAULT_BLOCK_SCORE = 3;
 
 export function auxFieldNames(
   formData: Record<string, string>,

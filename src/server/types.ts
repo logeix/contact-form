@@ -48,7 +48,7 @@ export interface SubmitFormOptions {
   gateFormNames?: string[];
   /** Minimum ms between page load timestamp and submit. Default 3000. */
   minFillMs?: number;
-  /** Accumulated score that blocks. Default 4. */
+  /** Accumulated score that blocks. Default 3. */
   blockScoreAt?: number;
   debug?: boolean;
   sender?: { name: string; email: string };

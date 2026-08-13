@@ -179,6 +179,46 @@ test("extraHardTerms from the site are merged", async () => {
   assert.ok(result.reasons.some((r) => r.includes("acme pitch")));
 });
 
+test("long sales letter blocks at default score 3", async () => {
+  const letter = Array.from({ length: 10 }, (_, i) => `Paragraph ${i + 1} about our offer.`).join(
+    "\n\n",
+  );
+  const result = await assessFormSpam({
+    db: mockDb(),
+    formData: {
+      "form-name": "contact",
+      submitted_at_client: String(Date.now() - 12_000),
+      phone: "4155551212",
+      message: `${letter} ${"x".repeat(400)}`,
+    },
+    ipAddress: "1.1.1.1",
+    options: baseOptions,
+    mode: "full",
+  });
+  assert.equal(result.decision, "blocked");
+  assert.ok(result.reasons.includes("message-too-long"));
+  assert.ok(result.reasons.includes("many-paragraphs"));
+  assert.ok(result.score >= 3);
+});
+
+test("outreach greeting is a scored term", async () => {
+  const result = await assessFormSpam({
+    db: mockDb(),
+    formData: {
+      "form-name": "contact",
+      submitted_at_client: String(Date.now() - 12_000),
+      phone: "4155551212",
+      message: "Hi, I hope you're doing well. Quick question about a leak.",
+    },
+    ipAddress: "1.1.1.1",
+    options: baseOptions,
+    mode: "full",
+  });
+  assert.equal(result.decision, "allow");
+  assert.ok(result.reasons.some((r) => r.includes("hope you re doing well")));
+  assert.equal(result.score, 2);
+});
+
 test("UK locale scores a US-style number", async () => {
   const result = await assessFormSpam({
     db: mockDb(),
