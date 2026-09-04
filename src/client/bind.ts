@@ -1,4 +1,7 @@
 import {
+  ATTRIBUTION_FIELD,
+} from "../attribution";
+import {
   AUX_ATTR,
   AUX_ROW_ATTR,
   FORM_BUILD_FIELD,
@@ -7,6 +10,10 @@ import {
   TIMESTAMP_FIELD,
   encodeFormBuild,
 } from "../shared";
+import {
+  collectFormAttributionJson,
+  rememberFormFirstTouch,
+} from "./attribution";
 
 export interface BindContactFormOptions {
   endpoint?: string;
@@ -74,8 +81,11 @@ export function bindContactForm(
     options.errorMessage || "Something went wrong. Please call us or try again.";
 
   const auxNames = collectAuxNames(form);
+  rememberFormFirstTouch(debug);
   const timestampInput = ensureHiddenInput(form, TIMESTAMP_FIELD);
   timestampInput.value = Date.now().toString();
+  const attributionInput = ensureHiddenInput(form, ATTRIBUTION_FIELD);
+  attributionInput.value = collectFormAttributionJson(debug);
 
   const sourceInput = form.querySelector(`input[name="${SOURCE_FIELD}"]`);
   if (sourceInput instanceof HTMLInputElement) {
@@ -103,6 +113,7 @@ export function bindContactForm(
     submitBtn.textContent = "Sending...";
 
     try {
+      attributionInput.value = collectFormAttributionJson(debug);
       const formData = new FormData(form);
       const body = new URLSearchParams();
       formData.forEach((value, key) => {

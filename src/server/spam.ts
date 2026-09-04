@@ -1,5 +1,6 @@
 /// <reference types="@cloudflare/workers-types" />
 
+import { ATTRIBUTION_FIELD } from "../attribution";
 import {
   DEFAULT_AUX_FIELDS,
   FORM_BUILD_FIELD,
@@ -40,6 +41,7 @@ export function stripMetaFields(
   delete clean[FORM_NAME_FIELD];
   delete clean[TIMESTAMP_FIELD];
   delete clean[FORM_BUILD_FIELD];
+  delete clean[ATTRIBUTION_FIELD];
   for (const name of auxNames) delete clean[name];
   return clean;
 }

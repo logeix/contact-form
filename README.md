@@ -9,7 +9,7 @@ This is a sibling of [`@logeix/phone-intent`](https://github.com/logeix/phone-in
 ## Install
 
 ```json
-"@logeix/contact-form": "^1.0.2"
+"@logeix/contact-form": "^1.1.0"
 ```
 
 ```bash
@@ -21,7 +21,7 @@ Same npm org as [`@logeix/phone-intent`](https://www.npmjs.com/package/@logeix/p
 GitHub tarball still works if a CI job cannot hit npm:
 
 ```json
-"@logeix/contact-form": "https://github.com/logeix/contact-form/archive/refs/tags/v1.0.2.tar.gz"
+"@logeix/contact-form": "https://github.com/logeix/contact-form/archive/refs/tags/v1.1.0.tar.gz"
 ```
 
 ## Site setup
@@ -34,7 +34,14 @@ Each site keeps its own D1 (e.g. `asap-plumbing-pros-forms`). Same binding `DB` 
 npx wrangler d1 execute YOUR-FORMS-DB --remote --file=node_modules/@logeix/contact-form/migrations/form_submissions.sql
 ```
 
-Existing sites that already have `form_submissions` with spam columns do **not** need to re-run this.
+Existing sites must apply the additive attribution migration once before upgrading:
+
+```bash
+npx wrangler d1 execute YOUR-FORMS-DB --remote --file=node_modules/@logeix/contact-form/migrations/form_submissions_v2_meta_json.sql
+```
+
+The handler safely falls back to storing the lead without attribution if this
+column is temporarily missing.
 
 ### 2. Pages Function
 
@@ -99,7 +106,17 @@ Default aux names the **server** always checks (even without JS): `website`, `co
 
 ### 4. Client init
 
-In the page/component script (same pattern as phone-intent):
+Capture first touch from the global layout so navigation before opening a form
+does not lose the original referrer or campaign:
+
+```astro
+<script>
+  import { rememberFormFirstTouch } from "@logeix/contact-form/client";
+  rememberFormFirstTouch(true);
+</script>
+```
+
+Then bind forms in the page/component script:
 
 ```astro
 <script>
@@ -115,6 +132,18 @@ In the page/component script (same pattern as phone-intent):
 Optional `onSuccess` runs after a successful POST, before the thank-you redirect (e.g. dispatch a conversion event).
 
 Keep site-specific JS (service dropdown from `?service=`, scroll-to-book) in the Astro file. Do not also attach a second submit handler.
+
+Custom JavaScript or React forms that post directly to the endpoint should add
+the reserved field through the package helper:
+
+```ts
+import { ATTRIBUTION_FIELD, collectFormAttributionJson } from "@logeix/contact-form/client";
+
+body.append(ATTRIBUTION_FIELD, collectFormAttributionJson(true));
+```
+
+Attribution is stored separately in `form_submissions.meta_json`; it is not
+included in customer form data or notification email fields.
 
 ## Handler options
 
@@ -154,12 +183,12 @@ Runs in order. Immediate block → `score: 100`. Blocked rows still insert to D1
 
 1. Bump `version` in `package.json`
 2. `npm test` && `npm run build`
-3. Commit, tag (`git tag v1.0.2`), push tag
+3. Commit, tag (`git tag v1.1.0`), push tag
 4. `npm publish --access public`
-5. Update client sites to `"@logeix/contact-form": "^1.0.2"`
+5. Update client sites to `"@logeix/contact-form": "^1.1.0"`
 
 ## Debug
 
 - Client: `{ debug: true }` or default — `[lgx-contact-form]` in the browser console
 - Server: Pages Function logs `[submit-form]`
-- Query D1: `spam_decision`, `spam_reasons`, `spam_elapsed_ms` on `form_submissions`
+- Query D1: `spam_decision`, `spam_reasons`, `spam_elapsed_ms`, and `meta_json` on `form_submissions`

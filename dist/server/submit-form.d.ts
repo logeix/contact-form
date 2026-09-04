@@ -1,3 +1,5 @@
+import { F as FormAttributionMeta } from '../attribution-BGUnjZkw.js';
+
 type PhoneLocale = "nanp" | "uk";
 interface EmailContent {
     subject: string;
@@ -9,9 +11,12 @@ interface SubmitFormEnv {
     SITE_NAME: string;
     NOTIFICATION_EMAIL?: string;
 }
+interface SubmissionContext {
+    attribution: FormAttributionMeta | null;
+}
 interface SubmitFormOptions {
     /** Build the notification email. `formName` is `contact`, `instant-quote`, etc. */
-    buildEmail: (formName: string, data: Record<string, string>) => EmailContent;
+    buildEmail: (formName: string, data: Record<string, string>, context: SubmissionContext) => EmailContent;
     /** Phone format scoring. Default `nanp` (US/CA). Use `uk` for Sam's. */
     phoneLocale?: PhoneLocale;
     /** Used when `NOTIFICATION_EMAIL` is unset. */
@@ -50,6 +55,7 @@ interface SubmitFormOptions {
  * Blocked rows get email suppressed and the reason stored in email_error.
  */
 
+declare function isMissingMetaJsonColumn(error: unknown): boolean;
 declare function createSubmitFormHandler(options: SubmitFormOptions): PagesFunction<SubmitFormEnv>;
 
-export { type EmailContent, type PhoneLocale, type SubmitFormOptions, createSubmitFormHandler };
+export { type EmailContent, FormAttributionMeta, type PhoneLocale, type SubmissionContext, type SubmitFormEnv, type SubmitFormOptions, createSubmitFormHandler, isMissingMetaJsonColumn };

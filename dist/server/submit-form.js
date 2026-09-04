@@ -1,3 +1,67 @@
+// src/attribution.ts
+var ATTRIBUTION_FIELD = "form_attribution";
+var ATTRIBUTION_SCHEMA_VERSION = 1;
+var UTM_KEYS = [
+  "utm_source",
+  "utm_medium",
+  "utm_campaign",
+  "utm_term",
+  "utm_content"
+];
+var CLICK_ID_KEYS = [
+  "gclid",
+  "gbraid",
+  "wbraid",
+  "fbclid",
+  "msclkid"
+];
+var URL_MAX = 2048;
+var PATH_MAX = 1024;
+var PARAM_MAX = 256;
+var DATE_MAX = 64;
+function cappedString(value, max) {
+  if (typeof value !== "string") return null;
+  const trimmed = value.trim();
+  return trimmed ? trimmed.slice(0, max) : null;
+}
+function pickParams(value, keys) {
+  if (!value || typeof value !== "object" || Array.isArray(value)) return {};
+  const source = value;
+  const result = {};
+  for (const key of keys) {
+    const text = cappedString(source[key], PARAM_MAX);
+    if (text) result[key] = text;
+  }
+  return result;
+}
+function sanitizeFormAttribution(raw) {
+  if (!raw || raw.length > 16384) return null;
+  try {
+    const value = JSON.parse(raw);
+    if (!value || typeof value !== "object" || Array.isArray(value)) return null;
+    const pageUrl = cappedString(value.page_url, URL_MAX);
+    const pagePath = cappedString(value.page_path, PATH_MAX);
+    const landingUrl = cappedString(value.landing_url, URL_MAX);
+    const firstTouchAt = cappedString(value.first_touch_at, DATE_MAX);
+    if (!pageUrl || !pagePath || !landingUrl || !firstTouchAt) return null;
+    const clickIds = pickParams(value.click_ids, CLICK_ID_KEYS);
+    return {
+      schema_version: ATTRIBUTION_SCHEMA_VERSION,
+      page_url: pageUrl,
+      page_path: pagePath,
+      page_search: cappedString(value.page_search, URL_MAX),
+      landing_url: landingUrl,
+      first_touch_at: firstTouchAt,
+      referrer: cappedString(value.referrer, URL_MAX),
+      tap_referrer: cappedString(value.tap_referrer, URL_MAX),
+      utm: pickParams(value.utm, UTM_KEYS),
+      click_ids: Object.keys(clickIds).length ? clickIds : null
+    };
+  } catch {
+    return null;
+  }
+}
+
 // src/shared.ts
 var FORM_BUILD_FIELD = "form_build";
 var TIMESTAMP_FIELD = "submitted_at_client";
@@ -225,6 +289,7 @@ function stripMetaFields(formData, auxNames) {
   delete clean[FORM_NAME_FIELD];
   delete clean[TIMESTAMP_FIELD];
   delete clean[FORM_BUILD_FIELD];
+  delete clean[ATTRIBUTION_FIELD];
   for (const name of auxNames) delete clean[name];
   return clean;
 }
@@ -326,6 +391,10 @@ async function assessFormSpam(params) {
 }
 
 // src/server/submit-form.ts
+function isMissingMetaJsonColumn(error) {
+  const message = error instanceof Error ? error.message : String(error);
+  return /no column named meta_json|has no column named meta_json/i.test(message);
+}
 function createSubmitFormHandler(options) {
   const debug = options.debug !== false;
   const assessFormNames = options.assessFormNames ?? ["contact"];
@@ -379,13 +448,10 @@ function createSubmitFormHandler(options) {
         }
       }
       const cleanFormData = stripMetaFields(formData, auxNames);
+      const attribution = sanitizeFormAttribution(formData[ATTRIBUTION_FIELD]);
+      const metaJson = attribution ? JSON.stringify(attribution) : null;
       const recordSpam = honeypotTriggered || assessFormNames.includes(formName) || gateFormNames.includes(formName);
-      const insertResult = await env.DB.prepare(
-        `INSERT INTO form_submissions
-         (site_name, form_name, submitted_at, ip_address, user_agent, form_data, email_sent,
-          spam_decision, spam_score, spam_reasons, spam_elapsed_ms)
-         VALUES (?, ?, ?, ?, ?, ?, 0, ?, ?, ?, ?)`
-      ).bind(
+      const insertBindings = [
         siteName,
         formName,
         submittedAt,
@@ -396,7 +462,25 @@ function createSubmitFormHandler(options) {
         recordSpam ? spamAssessment.score : null,
         recordSpam ? JSON.stringify(spamAssessment.reasons) : null,
         recordSpam ? spamAssessment.elapsedMs ?? null : null
-      ).run();
+      ];
+      let insertResult;
+      try {
+        insertResult = await env.DB.prepare(
+          `INSERT INTO form_submissions
+           (site_name, form_name, submitted_at, ip_address, user_agent, form_data, email_sent,
+            spam_decision, spam_score, spam_reasons, spam_elapsed_ms, meta_json)
+           VALUES (?, ?, ?, ?, ?, ?, 0, ?, ?, ?, ?, ?)`
+        ).bind(...insertBindings, metaJson).run();
+      } catch (insertError) {
+        if (!isMissingMetaJsonColumn(insertError)) throw insertError;
+        console.warn("[submit-form] meta_json column missing; storing lead without attribution");
+        insertResult = await env.DB.prepare(
+          `INSERT INTO form_submissions
+           (site_name, form_name, submitted_at, ip_address, user_agent, form_data, email_sent,
+            spam_decision, spam_score, spam_reasons, spam_elapsed_ms)
+           VALUES (?, ?, ?, ?, ?, ?, 0, ?, ?, ?, ?)`
+        ).bind(...insertBindings).run();
+      }
       if (!insertResult.success) throw new Error("Database insert failed");
       const submissionId = insertResult.meta.last_row_id;
       const emailSuppressedReason = spamAssessment.decision === "blocked" ? `Suppressed (score ${spamAssessment.score}): ${spamAssessment.reasons.join(", ")}` : null;
@@ -409,7 +493,9 @@ function createSubmitFormHandler(options) {
         throw new Error("No notification emails configured");
       }
       try {
-        const { subject, html } = options.buildEmail(formName, cleanFormData);
+        const { subject, html } = options.buildEmail(formName, cleanFormData, {
+          attribution
+        });
         await sendBrevoEmail(
           env.BREVO_API_KEY,
           to,
@@ -433,6 +519,6 @@ function createSubmitFormHandler(options) {
   };
 }
 
-export { createSubmitFormHandler };
+export { createSubmitFormHandler, isMissingMetaJsonColumn };
 //# sourceMappingURL=submit-form.js.map
 //# sourceMappingURL=submit-form.js.map

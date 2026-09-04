@@ -1,5 +1,7 @@
 /// <reference types="@cloudflare/workers-types" />
 
+import type { FormAttributionMeta } from "../attribution";
+
 export type SpamDecision = "allow" | "blocked";
 
 export type PhoneLocale = "nanp" | "uk";
@@ -23,9 +25,17 @@ export interface SubmitFormEnv {
   NOTIFICATION_EMAIL?: string;
 }
 
+export interface SubmissionContext {
+  attribution: FormAttributionMeta | null;
+}
+
 export interface SubmitFormOptions {
   /** Build the notification email. `formName` is `contact`, `instant-quote`, etc. */
-  buildEmail: (formName: string, data: Record<string, string>) => EmailContent;
+  buildEmail: (
+    formName: string,
+    data: Record<string, string>,
+    context: SubmissionContext,
+  ) => EmailContent;
   /** Phone format scoring. Default `nanp` (US/CA). Use `uk` for Sam's. */
   phoneLocale?: PhoneLocale;
   /** Used when `NOTIFICATION_EMAIL` is unset. */

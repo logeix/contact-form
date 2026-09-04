@@ -1,6 +1,6 @@
 {
   "name": "@logeix/contact-form",
-  "version": "1.0.2",
+  "version": "1.1.0",
   "description": "Contact form intake for LOGEIX Astro + Cloudflare Pages sites (D1 + Brevo + spam gates)",
   "type": "module",
   "license": "MIT",
@@ -34,8 +34,9 @@
   },
   "scripts": {
     "build": "tsup",
-    "test": "tsx --test test/spam.test.ts",
-    "prepublishOnly": "npm run build && npm test"
+    "test": "tsx --test test/spam.test.ts test/attribution.test.ts",
+    "typecheck": "tsc --noEmit",
+    "prepublishOnly": "npm run typecheck && npm run build && npm test"
   },
   "devDependencies": {
     "@cloudflare/workers-types": "^4.20260410.1",

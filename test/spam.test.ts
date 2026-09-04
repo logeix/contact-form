@@ -80,6 +80,7 @@ test("stripMetaFields drops timestamp, form_build, and aux names", () => {
       confirm_email: "x",
       name: "Pat",
       source: "https://example.com/",
+      form_attribution: "{\"schema_version\":1}",
     },
     ["confirm_email"],
   );

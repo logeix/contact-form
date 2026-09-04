@@ -18,7 +18,8 @@ CREATE TABLE IF NOT EXISTS form_submissions (
   spam_decision   TEXT,
   spam_score      INTEGER,
   spam_reasons    TEXT,
-  spam_elapsed_ms INTEGER
+  spam_elapsed_ms INTEGER,
+  meta_json       TEXT
 );
 
 CREATE INDEX IF NOT EXISTS idx_form_submissions_form_name ON form_submissions (form_name);

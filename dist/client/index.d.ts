@@ -1,3 +1,6 @@
+import { F as FormAttributionMeta, a as FirstTouch } from '../attribution-BGUnjZkw.js';
+export { A as ATTRIBUTION_FIELD, C as ClickIdKey, U as UtmKey } from '../attribution-BGUnjZkw.js';
+
 interface BindContactFormOptions {
     endpoint?: string;
     thankYouPath?: string;
@@ -10,6 +13,12 @@ interface BindContactFormOptions {
 declare function bindContactForm(form: HTMLFormElement, options?: BindContactFormOptions): void;
 /** Bind every `form[data-lgx-lead]` on the page. */
 declare function initContactForms(options?: BindContactFormOptions): void;
+
+/** Persist the first page of this browser tab. Call from the global layout. */
+declare function rememberFormFirstTouch(debug?: boolean): FirstTouch;
+/** Collect first-touch and submit-page attribution for a form POST. */
+declare function collectFormAttribution(debug?: boolean): FormAttributionMeta;
+declare function collectFormAttributionJson(debug?: boolean): string;
 
 /**
  * Names used in HTML and POST bodies.
@@ -26,4 +35,4 @@ declare const LEAD_FORM_ATTR = "data-lgx-lead";
 declare const FORM_BUILD_FIELD = "form_build";
 declare const TIMESTAMP_FIELD = "submitted_at_client";
 
-export { AUX_ATTR, AUX_ROW_ATTR, type BindContactFormOptions, FORM_BUILD_FIELD, LEAD_FORM_ATTR, TIMESTAMP_FIELD, bindContactForm, initContactForms };
+export { AUX_ATTR, AUX_ROW_ATTR, type BindContactFormOptions, FORM_BUILD_FIELD, FirstTouch, FormAttributionMeta, LEAD_FORM_ATTR, TIMESTAMP_FIELD, bindContactForm, collectFormAttribution, collectFormAttributionJson, initContactForms, rememberFormFirstTouch };

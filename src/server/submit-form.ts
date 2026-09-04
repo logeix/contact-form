@@ -6,13 +6,29 @@
  * Blocked rows get email suppressed and the reason stored in email_error.
  */
 
+import {
+  ATTRIBUTION_FIELD,
+  sanitizeFormAttribution,
+} from "../attribution";
 import { FORM_NAME_FIELD } from "../shared";
 import { DEFAULT_SENDER, notificationEmails, sendBrevoEmail } from "./brevo";
 import { clientIp, jsonResponse, parseFormBody } from "./parse";
 import { assessFormSpam, auxFieldFilled, auxFieldNames, stripMetaFields } from "./spam";
 import type { SpamAssessment, SubmitFormEnv, SubmitFormOptions } from "./types";
 
-export type { EmailContent, PhoneLocale, SubmitFormOptions } from "./types";
+export type {
+  EmailContent,
+  PhoneLocale,
+  SubmissionContext,
+  SubmitFormEnv,
+  SubmitFormOptions,
+} from "./types";
+export type { FormAttributionMeta } from "../attribution";
+
+export function isMissingMetaJsonColumn(error: unknown): boolean {
+  const message = error instanceof Error ? error.message : String(error);
+  return /no column named meta_json|has no column named meta_json/i.test(message);
+}
 
 export function createSubmitFormHandler(
   options: SubmitFormOptions,
@@ -77,18 +93,14 @@ export function createSubmitFormHandler(
       }
 
       const cleanFormData = stripMetaFields(formData, auxNames);
+      const attribution = sanitizeFormAttribution(formData[ATTRIBUTION_FIELD]);
+      const metaJson = attribution ? JSON.stringify(attribution) : null;
       const recordSpam =
         honeypotTriggered ||
         assessFormNames.includes(formName) ||
         gateFormNames.includes(formName);
 
-      const insertResult = await env.DB.prepare(
-        `INSERT INTO form_submissions
-         (site_name, form_name, submitted_at, ip_address, user_agent, form_data, email_sent,
-          spam_decision, spam_score, spam_reasons, spam_elapsed_ms)
-         VALUES (?, ?, ?, ?, ?, ?, 0, ?, ?, ?, ?)`,
-      )
-        .bind(
+      const insertBindings = [
           siteName,
           formName,
           submittedAt,
@@ -99,8 +111,30 @@ export function createSubmitFormHandler(
           recordSpam ? spamAssessment.score : null,
           recordSpam ? JSON.stringify(spamAssessment.reasons) : null,
           recordSpam ? (spamAssessment.elapsedMs ?? null) : null,
+      ];
+
+      let insertResult;
+      try {
+        insertResult = await env.DB.prepare(
+          `INSERT INTO form_submissions
+           (site_name, form_name, submitted_at, ip_address, user_agent, form_data, email_sent,
+            spam_decision, spam_score, spam_reasons, spam_elapsed_ms, meta_json)
+           VALUES (?, ?, ?, ?, ?, ?, 0, ?, ?, ?, ?, ?)`,
         )
-        .run();
+          .bind(...insertBindings, metaJson)
+          .run();
+      } catch (insertError) {
+        if (!isMissingMetaJsonColumn(insertError)) throw insertError;
+        console.warn("[submit-form] meta_json column missing; storing lead without attribution");
+        insertResult = await env.DB.prepare(
+          `INSERT INTO form_submissions
+           (site_name, form_name, submitted_at, ip_address, user_agent, form_data, email_sent,
+            spam_decision, spam_score, spam_reasons, spam_elapsed_ms)
+           VALUES (?, ?, ?, ?, ?, ?, 0, ?, ?, ?, ?)`,
+        )
+          .bind(...insertBindings)
+          .run();
+      }
 
       if (!insertResult.success) throw new Error("Database insert failed");
 
@@ -124,7 +158,9 @@ export function createSubmitFormHandler(
       }
 
       try {
-        const { subject, html } = options.buildEmail(formName, cleanFormData);
+        const { subject, html } = options.buildEmail(formName, cleanFormData, {
+          attribution,
+        });
         await sendBrevoEmail(
           env.BREVO_API_KEY,
           to,
