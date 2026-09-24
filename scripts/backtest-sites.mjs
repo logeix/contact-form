@@ -10,10 +10,10 @@
  *   ADMIN_TOKEN=... node scripts/backtest-sites.mjs --out C:\temp\spam-backtest.json
  *
  * Prints counts only. The --out file holds messages and verdicts for review, so delete it after.
- * Needs wrangler access to the LOGEIX Cloudflare account and the Worker's ADMIN_TOKEN. That secret
- * is normally unset, which closes the workers.dev entrance: in worker/, run
- * `npx wrangler secret put ADMIN_TOKEN` with a fresh random value, run this, then
- * `npx wrangler secret delete ADMIN_TOKEN`.
+ * Needs wrangler access to the LOGEIX Cloudflare account and a temporary way in, since the Worker
+ * normally has no public URL: in worker/, set "workers_dev": true in wrangler.jsonc, deploy, and
+ * `npx wrangler secret put ADMIN_TOKEN` with a fresh random value. Afterwards
+ * `npx wrangler secret delete ADMIN_TOKEN`, set workers_dev back to false, and deploy again.
  */
 
 import { execFileSync } from "node:child_process";
