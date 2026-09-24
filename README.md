@@ -210,8 +210,9 @@ If the Worker errors or times out, the rules' decision stands and `ai-error:<cod
 1. Bump `version` in `package.json`
 2. `npm test` && `npm run build` (commit the rebuilt `dist/` too, for tarball installs)
 3. Commit, tag (`git tag v1.2.0`), push the commit and the tag
-4. GitHub Actions (`.github/workflows/publish.yml`) publishes the tag to npm through trusted publishing; no token needed. It can also be run by hand from the Actions tab, and it skips versions npm already has.
-5. Update client sites to `"@logeix/contact-form": "^1.2.0"`
+4. GitHub Actions (`.github/workflows/publish.yml`) stages the tag on npm through trusted publishing; no token needed. It can also be run by hand from the Actions tab, and it skips versions npm already has.
+5. Approve the staged version on npmjs.com (2FA) to make it live
+6. Update client sites to `"@logeix/contact-form": "^1.2.0"`
 
 Worker changes deploy separately: `cd worker && npx wrangler deploy` (migrations: `npx wrangler d1 migrations apply lgx-spam-check --remote`).
 

@@ -1,9 +1,10 @@
 name: Publish to npm
 
-# Publishes when a version tag (v1.2.3) is pushed, or on demand from the Actions tab.
+# Stages a release when a version tag (v1.2.3) is pushed, or on demand from the Actions tab.
 # Uses npm trusted publishing (OIDC), so no npm token is stored in GitHub. One-time setup on
 # npmjs.com: @logeix/contact-form → Settings → Trusted publishing → GitHub Actions with
-# organization "logeix", repository "contact-form", workflow "publish.yml".
+# organization "logeix", repository "contact-form", workflow "publish.yml" (stage-only).
+# A staged version goes live only after a maintainer approves it on npmjs.com with 2FA.
 
 on:
   push:
@@ -23,7 +24,7 @@ jobs:
         with:
           node-version: 22
           registry-url: https://registry.npmjs.org
-      # Trusted publishing needs npm 11.5.1+
+      # Staged publishing needs npm 11.15+ and Node 22.14+
       - run: npm install -g npm@latest
       - run: npm ci
       - name: Tag matches package.json
@@ -37,6 +38,7 @@ jobs:
           else
             echo "exists=false" >> "$GITHUB_OUTPUT"
           fi
-      # prepublishOnly runs typecheck, build, and tests first
       - if: steps.published.outputs.exists == 'false'
-        run: npm publish --access public
+        run: npm run typecheck && npm test && npm run build
+      - if: steps.published.outputs.exists == 'false'
+        run: npm stage publish --access public --provenance
