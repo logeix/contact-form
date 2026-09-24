@@ -1,0 +1,42 @@
+name: Publish to npm
+
+# Publishes when a version tag (v1.2.3) is pushed, or on demand from the Actions tab.
+# Uses npm trusted publishing (OIDC), so no npm token is stored in GitHub. One-time setup on
+# npmjs.com: @logeix/contact-form → Settings → Trusted publishing → GitHub Actions with
+# organization "logeix", repository "contact-form", workflow "publish.yml".
+
+on:
+  push:
+    tags: ["v*"]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  id-token: write
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 22
+          registry-url: https://registry.npmjs.org
+      # Trusted publishing needs npm 11.5.1+
+      - run: npm install -g npm@latest
+      - run: npm ci
+      - name: Tag matches package.json
+        if: github.ref_type == 'tag'
+        run: test "v$(node -p "require('./package.json').version")" = "$GITHUB_REF_NAME"
+      - name: Skip versions already on npm
+        id: published
+        run: |
+          if npm view "$(node -p "require('./package.json').name")@$(node -p "require('./package.json').version")" version >/dev/null 2>&1; then
+            echo "exists=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "exists=false" >> "$GITHUB_OUTPUT"
+          fi
+      # prepublishOnly runs typecheck, build, and tests first
+      - if: steps.published.outputs.exists == 'false'
+        run: npm publish --access public
