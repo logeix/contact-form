@@ -1,0 +1,28 @@
+{
+  // Central AI spam check for LOGEIX client sites. Sites bind to it as SPAM_CHECK:
+  //   [[services]]
+  //   binding = "SPAM_CHECK"
+  //   service = "lgx-spam-check"
+  // Secrets: OPENROUTER_JEV_KEY (required), ADMIN_TOKEN (only for testing over workers.dev).
+  "name": "lgx-spam-check",
+  "main": "src/index.ts",
+  "compatibility_date": "2026-09-01",
+  "account_id": "273878c2a1ea5cc2b33b5ccb2945cac8",
+  "workers_dev": true,
+  "observability": { "enabled": true },
+  "vars": {
+    "MODE": "shadow",
+    "ENFORCE_SITES": "",
+    "JEV_MODEL": "typesafe/jev-1.13",
+    "BLOCK_AT": "0.85",
+    "REVIEW_AT": "0.5"
+  },
+  "d1_databases": [
+    {
+      "binding": "DB",
+      "database_name": "lgx-spam-check",
+      "database_id": "275c5d3b-1683-4079-aefb-9e47c486b496",
+      "migrations_dir": "migrations"
+    }
+  ]
+}

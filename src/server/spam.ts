@@ -62,6 +62,11 @@ function phoneScoreReason(rawPhone: string, locale: PhoneLocale): string | null 
   return null;
 }
 
+export function phoneStatus(rawPhone: string, locale: PhoneLocale): "valid" | "invalid" | "missing" {
+  if (!rawPhone.trim()) return "missing";
+  return phoneScoreReason(rawPhone, locale) ? "invalid" : "valid";
+}
+
 export async function assessFormSpam(params: {
   db: D1Database;
   formData: Record<string, string>;
@@ -83,20 +88,52 @@ export async function assessFormSpam(params: {
     // Negative elapsed = client clock ahead / forged future timestamp
     if (elapsedMs < 0 || elapsedMs < minFillMs) {
       reasons.push(elapsedMs < 0 ? "invalid-client-timestamp" : "submitted-too-fast");
-      return { decision: "blocked", score: 100, reasons, elapsedMs };
+      return { decision: "blocked", score: 100, reasons, elapsedMs, stage: "gate" };
     }
   } else {
     reasons.push("missing-client-timestamp");
-    return { decision: "blocked", score: 100, reasons, elapsedMs };
+    return { decision: "blocked", score: 100, reasons, elapsedMs, stage: "gate" };
   }
 
   if (mode === "gates") {
-    return { decision: "allow", score: 0, reasons, elapsedMs };
+    return { decision: "allow", score: 0, reasons, elapsedMs, stage: "gate" };
+  }
+
+  // Rate limits are bot gates too, so they run before the content rules the AI check can overrule.
+  const tenMinutesAgo = new Date(Date.now() - 10 * 60 * 1000).toISOString();
+  const formName = formData[FORM_NAME_FIELD] || "contact";
+
+  const ipRow = await db
+    .prepare(
+      `SELECT COUNT(*) AS c FROM form_submissions
+       WHERE form_name = ? AND submitted_at >= ? AND ip_address = ?`,
+    )
+    .bind(formName, tenMinutesAgo, ipAddress)
+    .first<{ c: number }>();
+  if (Number(ipRow?.c || 0) >= 3) {
+    reasons.push("ip-rate-limited");
+    return { decision: "blocked", score: 100, reasons, elapsedMs, stage: "gate" };
+  }
+
+  const email = (formData.email || "").trim().toLowerCase();
+  if (email) {
+    const emailRow = await db
+      .prepare(
+        `SELECT COUNT(*) AS c FROM form_submissions
+         WHERE form_name = ? AND submitted_at >= ?
+           AND json_extract(form_data, '$.email') = ?`,
+      )
+      .bind(formName, tenMinutesAgo, email)
+      .first<{ c: number }>();
+    if (Number(emailRow?.c || 0) >= 2) {
+      reasons.push("email-rate-limited");
+      return { decision: "blocked", score: 100, reasons, elapsedMs, stage: "gate" };
+    }
   }
 
   if (/(https?:\/\/|www\.)/i.test(formData.message || "")) {
     reasons.push("contains-link");
-    return { decision: "blocked", score: 100, reasons, elapsedMs };
+    return { decision: "blocked", score: 100, reasons, elapsedMs, stage: "content" };
   }
 
   const msg = normaliseText(formData.message || "");
@@ -104,7 +141,7 @@ export async function assessFormSpam(params: {
   for (const term of hardTerms) {
     if (msg.includes(normaliseText(term))) {
       reasons.push(`hard-term:${term}`);
-      return { decision: "blocked", score: 100, reasons, elapsedMs };
+      return { decision: "blocked", score: 100, reasons, elapsedMs, stage: "content" };
     }
   }
 
@@ -133,40 +170,9 @@ export async function assessFormSpam(params: {
     reasons.push(phoneReason);
   }
 
-  const tenMinutesAgo = new Date(Date.now() - 10 * 60 * 1000).toISOString();
-  const formName = formData[FORM_NAME_FIELD] || "contact";
-
-  const ipRow = await db
-    .prepare(
-      `SELECT COUNT(*) AS c FROM form_submissions
-       WHERE form_name = ? AND submitted_at >= ? AND ip_address = ?`,
-    )
-    .bind(formName, tenMinutesAgo, ipAddress)
-    .first<{ c: number }>();
-  if (Number(ipRow?.c || 0) >= 3) {
-    reasons.push("ip-rate-limited");
-    return { decision: "blocked", score: 100, reasons, elapsedMs };
-  }
-
-  const email = (formData.email || "").trim().toLowerCase();
-  if (email) {
-    const emailRow = await db
-      .prepare(
-        `SELECT COUNT(*) AS c FROM form_submissions
-         WHERE form_name = ? AND submitted_at >= ?
-           AND json_extract(form_data, '$.email') = ?`,
-      )
-      .bind(formName, tenMinutesAgo, email)
-      .first<{ c: number }>();
-    if (Number(emailRow?.c || 0) >= 2) {
-      reasons.push("email-rate-limited");
-      return { decision: "blocked", score: 100, reasons, elapsedMs };
-    }
-  }
-
   if (score >= blockScoreAt) {
-    return { decision: "blocked", score, reasons, elapsedMs };
+    return { decision: "blocked", score, reasons, elapsedMs, stage: "content" };
   }
 
-  return { decision: "allow", score, reasons, elapsedMs };
+  return { decision: "allow", score, reasons, elapsedMs, stage: "content" };
 }

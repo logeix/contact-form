@@ -87,69 +87,6 @@ function uniqueFieldNames(names) {
   return out;
 }
 
-// src/server/brevo.ts
-var DEFAULT_SENDER = {
-  name: "LOGEIX Agency",
-  email: "noreply@logeix.com"
-};
-async function sendBrevoEmail(apiKey, toEmails, subject, htmlContent, sender = DEFAULT_SENDER) {
-  const payload = {
-    sender,
-    to: toEmails.map((email) => ({ email })),
-    subject,
-    htmlContent
-  };
-  const res = await fetch("https://api.brevo.com/v3/smtp/email", {
-    method: "POST",
-    headers: {
-      Accept: "application/json",
-      "Content-Type": "application/json",
-      "api-key": apiKey
-    },
-    body: JSON.stringify(payload)
-  });
-  if (!res.ok) {
-    throw new Error(`Brevo API error: ${res.status} \u2013 ${await res.text()}`);
-  }
-}
-function notificationEmails(envEmail, fallback) {
-  const list = (envEmail || "").split(",").map((s) => s.trim()).filter(Boolean);
-  if (list.length) return list;
-  return fallback?.filter(Boolean) ?? [];
-}
-
-// src/server/parse.ts
-async function parseFormBody(request) {
-  const contentType = request.headers.get("content-type") || "";
-  if (contentType.includes("application/x-www-form-urlencoded")) {
-    const text = await request.text();
-    const formData = {};
-    new URLSearchParams(text).forEach((value, key) => {
-      formData[key] = value;
-    });
-    return formData;
-  }
-  if (contentType.includes("application/json")) {
-    const raw = await request.json();
-    const formData = {};
-    for (const [key, value] of Object.entries(raw)) {
-      if (value == null) continue;
-      formData[key] = String(value);
-    }
-    return formData;
-  }
-  return null;
-}
-function jsonResponse(body, status = 200) {
-  return new Response(JSON.stringify(body), {
-    status,
-    headers: { "Content-Type": "application/json" }
-  });
-}
-function clientIp(request) {
-  return request.headers.get("CF-Connecting-IP") || request.headers.get("X-Forwarded-For") || "unknown";
-}
-
 // src/server/terms.ts
 var HARD_SPAM_TERMS = [
   "seo report",
@@ -307,6 +244,10 @@ function phoneScoreReason(rawPhone, locale) {
   if (digits.length > 0 && !/^1?[2-9]\d{9}$/.test(digits)) return "non-us-phone";
   return null;
 }
+function phoneStatus(rawPhone, locale) {
+  if (!rawPhone.trim()) return "missing";
+  return phoneScoreReason(rawPhone, locale) ? "invalid" : "valid";
+}
 async function assessFormSpam(params) {
   const { db, formData, ipAddress, options, mode } = params;
   const reasons = [];
@@ -320,25 +261,47 @@ async function assessFormSpam(params) {
     elapsedMs = Date.now() - clientTimestamp;
     if (elapsedMs < 0 || elapsedMs < minFillMs) {
       reasons.push(elapsedMs < 0 ? "invalid-client-timestamp" : "submitted-too-fast");
-      return { decision: "blocked", score: 100, reasons, elapsedMs };
+      return { decision: "blocked", score: 100, reasons, elapsedMs, stage: "gate" };
     }
   } else {
     reasons.push("missing-client-timestamp");
-    return { decision: "blocked", score: 100, reasons, elapsedMs };
+    return { decision: "blocked", score: 100, reasons, elapsedMs, stage: "gate" };
   }
   if (mode === "gates") {
-    return { decision: "allow", score: 0, reasons, elapsedMs };
+    return { decision: "allow", score: 0, reasons, elapsedMs, stage: "gate" };
+  }
+  const tenMinutesAgo = new Date(Date.now() - 10 * 60 * 1e3).toISOString();
+  const formName = formData[FORM_NAME_FIELD] || "contact";
+  const ipRow = await db.prepare(
+    `SELECT COUNT(*) AS c FROM form_submissions
+       WHERE form_name = ? AND submitted_at >= ? AND ip_address = ?`
+  ).bind(formName, tenMinutesAgo, ipAddress).first();
+  if (Number(ipRow?.c || 0) >= 3) {
+    reasons.push("ip-rate-limited");
+    return { decision: "blocked", score: 100, reasons, elapsedMs, stage: "gate" };
+  }
+  const email = (formData.email || "").trim().toLowerCase();
+  if (email) {
+    const emailRow = await db.prepare(
+      `SELECT COUNT(*) AS c FROM form_submissions
+         WHERE form_name = ? AND submitted_at >= ?
+           AND json_extract(form_data, '$.email') = ?`
+    ).bind(formName, tenMinutesAgo, email).first();
+    if (Number(emailRow?.c || 0) >= 2) {
+      reasons.push("email-rate-limited");
+      return { decision: "blocked", score: 100, reasons, elapsedMs, stage: "gate" };
+    }
   }
   if (/(https?:\/\/|www\.)/i.test(formData.message || "")) {
     reasons.push("contains-link");
-    return { decision: "blocked", score: 100, reasons, elapsedMs };
+    return { decision: "blocked", score: 100, reasons, elapsedMs, stage: "content" };
   }
   const msg = normaliseText(formData.message || "");
   const hardTerms = [...HARD_SPAM_TERMS, ...options.extraHardTerms ?? []];
   for (const term of hardTerms) {
     if (msg.includes(normaliseText(term))) {
       reasons.push(`hard-term:${term}`);
-      return { decision: "blocked", score: 100, reasons, elapsedMs };
+      return { decision: "blocked", score: 100, reasons, elapsedMs, stage: "content" };
     }
   }
   const scoreTerms = [...SCORE_SPAM_TERMS, ...options.extraScoreTerms ?? []];
@@ -362,32 +325,160 @@ async function assessFormSpam(params) {
     score += 2;
     reasons.push(phoneReason);
   }
-  const tenMinutesAgo = new Date(Date.now() - 10 * 60 * 1e3).toISOString();
-  const formName = formData[FORM_NAME_FIELD] || "contact";
-  const ipRow = await db.prepare(
-    `SELECT COUNT(*) AS c FROM form_submissions
-       WHERE form_name = ? AND submitted_at >= ? AND ip_address = ?`
-  ).bind(formName, tenMinutesAgo, ipAddress).first();
-  if (Number(ipRow?.c || 0) >= 3) {
-    reasons.push("ip-rate-limited");
-    return { decision: "blocked", score: 100, reasons, elapsedMs };
-  }
-  const email = (formData.email || "").trim().toLowerCase();
-  if (email) {
-    const emailRow = await db.prepare(
-      `SELECT COUNT(*) AS c FROM form_submissions
-         WHERE form_name = ? AND submitted_at >= ?
-           AND json_extract(form_data, '$.email') = ?`
-    ).bind(formName, tenMinutesAgo, email).first();
-    if (Number(emailRow?.c || 0) >= 2) {
-      reasons.push("email-rate-limited");
-      return { decision: "blocked", score: 100, reasons, elapsedMs };
-    }
-  }
   if (score >= blockScoreAt) {
-    return { decision: "blocked", score, reasons, elapsedMs };
+    return { decision: "blocked", score, reasons, elapsedMs, stage: "content" };
   }
-  return { decision: "allow", score, reasons, elapsedMs };
+  return { decision: "allow", score, reasons, elapsedMs, stage: "content" };
+}
+
+// src/server/ai-check.ts
+var CHECK_URL = "https://spam-check.internal/v1/check";
+var DEFAULT_TIMEOUT_MS = 4e3;
+var MAX_MESSAGE_CHARS = 4e3;
+var MAX_DETAIL_CHARS = 200;
+var PRIVATE_FIELDS = /* @__PURE__ */ new Set([
+  "name",
+  "first_name",
+  "last_name",
+  "full_name",
+  "email",
+  "phone",
+  "address",
+  "street",
+  "postcode",
+  "zip",
+  "zipcode",
+  "source",
+  "submit",
+  "message"
+]);
+function buildAiCheckPayload(params) {
+  const { formData } = params;
+  const details = {};
+  for (const [key, value] of Object.entries(formData)) {
+    if (Object.keys(details).length >= 10) break;
+    const trimmed = (value || "").trim();
+    if (!trimmed || PRIVATE_FIELDS.has(key.toLowerCase())) continue;
+    details[key] = trimmed.slice(0, MAX_DETAIL_CHARS);
+  }
+  const email = (formData.email || "").trim();
+  return {
+    site: params.site,
+    form: params.formName,
+    submittedAt: params.submittedAt,
+    message: (formData.message || "").slice(0, MAX_MESSAGE_CHARS),
+    details,
+    emailDomain: email.includes("@") ? email.split("@").pop() : void 0,
+    phone: phoneStatus(formData.phone || "", params.phoneLocale),
+    phoneLocale: params.phoneLocale,
+    rules: {
+      decision: params.assessment.decision,
+      score: params.assessment.score,
+      reasons: params.assessment.reasons
+    }
+  };
+}
+async function requestAiVerdict(binding, payload, timeoutMs = DEFAULT_TIMEOUT_MS) {
+  try {
+    const res = await binding.fetch(CHECK_URL, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(payload),
+      signal: AbortSignal.timeout(timeoutMs)
+    });
+    const data = await res.json().catch(() => null);
+    const mode = data?.mode;
+    const verdict = data?.verdict;
+    if (data?.ok === true && (mode === "shadow" || mode === "enforce") && (verdict === "allow" || verdict === "review" || verdict === "block")) {
+      return { ok: true, mode, verdict, pSpam: Number(data.pSpam ?? 0), choice: String(data.choice ?? "") };
+    }
+    return { ok: false, error: typeof data?.error === "string" ? data.error : `http_${res.status}` };
+  } catch (err) {
+    return {
+      ok: false,
+      error: err instanceof Error && err.name === "TimeoutError" ? "timeout" : "unreachable"
+    };
+  }
+}
+function aiReason(v) {
+  if (!v.ok) return `ai-error:${v.error}`;
+  return `${v.mode === "enforce" ? "ai" : "ai-shadow"}:${v.verdict}:${v.choice}:${v.pSpam.toFixed(2)}`;
+}
+function applyAiVerdict(assessment, v) {
+  const reasons = [...assessment.reasons, aiReason(v)];
+  if (!v.ok || v.mode === "shadow") {
+    return { assessment: { ...assessment, reasons }, subjectPrefix: "" };
+  }
+  if (v.verdict === "block") {
+    return { assessment: { ...assessment, decision: "blocked", score: 100, reasons }, subjectPrefix: "" };
+  }
+  return {
+    assessment: { ...assessment, decision: "allow", reasons },
+    subjectPrefix: v.verdict === "review" ? "[Possible spam] " : ""
+  };
+}
+
+// src/server/brevo.ts
+var DEFAULT_SENDER = {
+  name: "LOGEIX Agency",
+  email: "noreply@logeix.com"
+};
+async function sendBrevoEmail(apiKey, toEmails, subject, htmlContent, sender = DEFAULT_SENDER) {
+  const payload = {
+    sender,
+    to: toEmails.map((email) => ({ email })),
+    subject,
+    htmlContent
+  };
+  const res = await fetch("https://api.brevo.com/v3/smtp/email", {
+    method: "POST",
+    headers: {
+      Accept: "application/json",
+      "Content-Type": "application/json",
+      "api-key": apiKey
+    },
+    body: JSON.stringify(payload)
+  });
+  if (!res.ok) {
+    throw new Error(`Brevo API error: ${res.status} \u2013 ${await res.text()}`);
+  }
+}
+function notificationEmails(envEmail, fallback) {
+  const list = (envEmail || "").split(",").map((s) => s.trim()).filter(Boolean);
+  if (list.length) return list;
+  return fallback?.filter(Boolean) ?? [];
+}
+
+// src/server/parse.ts
+async function parseFormBody(request) {
+  const contentType = request.headers.get("content-type") || "";
+  if (contentType.includes("application/x-www-form-urlencoded")) {
+    const text = await request.text();
+    const formData = {};
+    new URLSearchParams(text).forEach((value, key) => {
+      formData[key] = value;
+    });
+    return formData;
+  }
+  if (contentType.includes("application/json")) {
+    const raw = await request.json();
+    const formData = {};
+    for (const [key, value] of Object.entries(raw)) {
+      if (value == null) continue;
+      formData[key] = String(value);
+    }
+    return formData;
+  }
+  return null;
+}
+function jsonResponse(body, status = 200) {
+  return new Response(JSON.stringify(body), {
+    status,
+    headers: { "Content-Type": "application/json" }
+  });
+}
+function clientIp(request) {
+  return request.headers.get("CF-Connecting-IP") || request.headers.get("X-Forwarded-For") || "unknown";
 }
 
 // src/server/submit-form.ts
@@ -417,6 +508,7 @@ function createSubmitFormHandler(options) {
       const userAgent = request.headers.get("User-Agent") || "unknown";
       const submittedAt = (/* @__PURE__ */ new Date()).toISOString();
       let spamAssessment = { decision: "allow", score: 0, reasons: [] };
+      let subjectPrefix = "";
       if (honeypotTriggered) {
         spamAssessment = {
           decision: "blocked",
@@ -432,6 +524,22 @@ function createSubmitFormHandler(options) {
           options,
           mode: "full"
         });
+        if (spamAssessment.stage === "content" && env.SPAM_CHECK && options.aiCheck !== false && (formData.message || "").trim()) {
+          const verdict = await requestAiVerdict(
+            env.SPAM_CHECK,
+            buildAiCheckPayload({
+              site: siteName,
+              formName,
+              submittedAt,
+              formData: stripMetaFields(formData, auxNames),
+              phoneLocale: options.phoneLocale ?? "nanp",
+              assessment: spamAssessment
+            }),
+            options.aiTimeoutMs
+          );
+          ({ assessment: spamAssessment, subjectPrefix } = applyAiVerdict(spamAssessment, verdict));
+          debugLog("ai check:", aiReason(verdict));
+        }
         if (spamAssessment.decision === "blocked") {
           debugLog("submission blocked (logged):", spamAssessment.reasons.join("; "));
         }
@@ -499,7 +607,7 @@ function createSubmitFormHandler(options) {
         await sendBrevoEmail(
           env.BREVO_API_KEY,
           to,
-          subject,
+          subjectPrefix + subject,
           html,
           options.sender ?? DEFAULT_SENDER
         );

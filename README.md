@@ -9,7 +9,7 @@ This is a sibling of [`@logeix/phone-intent`](https://github.com/logeix/phone-in
 ## Install
 
 ```json
-"@logeix/contact-form": "^1.1.0"
+"@logeix/contact-form": "^1.2.0"
 ```
 
 ```bash
@@ -21,7 +21,7 @@ Same npm org as [`@logeix/phone-intent`](https://www.npmjs.com/package/@logeix/p
 GitHub tarball still works if a CI job cannot hit npm:
 
 ```json
-"@logeix/contact-form": "https://github.com/logeix/contact-form/archive/refs/tags/v1.1.0.tar.gz"
+"@logeix/contact-form": "https://github.com/logeix/contact-form/archive/refs/tags/v1.2.0.tar.gz"
 ```
 
 ## Site setup
@@ -163,6 +163,8 @@ Hardcoded defaults, then per-site overrides:
 | `blockScoreAt` | `3` | Accumulated score threshold |
 | `debug` | `true` | Server `console.log` |
 | `sender` | LOGEIX / noreply@logeix.com | Brevo from |
+| `aiCheck` | `true` | Ask the `SPAM_CHECK` Worker (no-op without the binding) |
+| `aiTimeoutMs` | `4000` | Keep the rules' decision if the AI check is slower |
 
 Phrase lists live in `src/server/terms.ts`. Bump the package to change them for every site.
 
@@ -170,22 +172,48 @@ Phrase lists live in `src/server/terms.ts`. Bump the package to change them for 
 
 Runs in order. Immediate block → `score: 100`. Blocked rows still insert to D1 and return `{ success: true }` so bots cannot probe.
 
+Bot gates (plain code, always final):
+
 1. Aux field has a value (`honeypot-field-filled`)
 2. Missing / non-numeric / **negative** `submitted_at_client`
 3. Elapsed &lt; `minFillMs`
-4. URL in `message`
-5. Hard phrase
-6. Scored phrases, long message, many paragraphs, non-local phone
-7. ≥ 3 same IP in 10 min, ≥ 2 same email in 10 min
+4. ≥ 3 same IP in 10 min, ≥ 2 same email in 10 min
+
+Content rules (the AI check can overrule these when a site is enforced):
+
+5. URL in `message`
+6. Hard phrase
+7. Scored phrases, long message, many paragraphs, non-local phone
 8. Score ≥ `blockScoreAt`
+
+## AI spam check (optional)
+
+Messages that pass the bot gates can be sent to the central `lgx-spam-check` Worker (code in [`worker/`](./worker), deployed on the LOGEIX Cloudflare account). It holds the OpenRouter key and asks TypeSafe's Jev model whether the message is a customer, a sales pitch, another real contact, or junk. The key never touches this package or the client site.
+
+Add a service binding to the site's `wrangler.toml` (same Cloudflare account as the Worker) and redeploy:
+
+```toml
+[[services]]
+binding = "SPAM_CHECK"
+service = "lgx-spam-check"
+```
+
+The Worker decides per site what happens with its verdict:
+
+- **shadow** (default): the rules still decide; the verdict is only recorded, e.g. `ai-shadow:block:sales_pitch:0.97` in `spam_reasons`.
+- **enforce** (`MODE=enforce`, or the site listed in `ENFORCE_SITES`): the verdict replaces the content rules. `block` suppresses the email, `review` delivers it with a `[Possible spam] ` subject prefix, `allow` delivers it even if the rules would have blocked it.
+
+If the Worker errors or times out, the rules' decision stands and `ai-error:<code>` is recorded. Only the message, short non-contact fields (for example `service`), the email domain, and whether the phone number looks valid are sent. Names, email addresses, and phone numbers stay on the site. The Worker's own D1 logs every verdict without message text.
 
 ## Publish (maintainers)
 
 1. Bump `version` in `package.json`
 2. `npm test` && `npm run build`
-3. Commit, tag (`git tag v1.1.0`), push tag
+3. Commit, tag (`git tag v1.2.0`), push tag
 4. `npm publish --access public`
-5. Update client sites to `"@logeix/contact-form": "^1.1.0"`
+5. Update client sites to `"@logeix/contact-form": "^1.2.0"`
+
+Worker changes deploy separately: `cd worker && npx wrangler deploy` (migrations: `npx wrangler d1 migrations apply lgx-spam-check --remote`).
 
 ## Debug
 

@@ -11,6 +11,7 @@ import {
   sanitizeFormAttribution,
 } from "../attribution";
 import { FORM_NAME_FIELD } from "../shared";
+import { aiReason, applyAiVerdict, buildAiCheckPayload, requestAiVerdict } from "./ai-check";
 import { DEFAULT_SENDER, notificationEmails, sendBrevoEmail } from "./brevo";
 import { clientIp, jsonResponse, parseFormBody } from "./parse";
 import { assessFormSpam, auxFieldFilled, auxFieldNames, stripMetaFields } from "./spam";
@@ -60,6 +61,7 @@ export function createSubmitFormHandler(
       const submittedAt = new Date().toISOString();
 
       let spamAssessment: SpamAssessment = { decision: "allow", score: 0, reasons: [] };
+      let subjectPrefix = "";
 
       if (honeypotTriggered) {
         spamAssessment = {
@@ -76,6 +78,28 @@ export function createSubmitFormHandler(
           options,
           mode: "full",
         });
+        // Only messages that got past the bot gates are worth an AI call.
+        if (
+          spamAssessment.stage === "content" &&
+          env.SPAM_CHECK &&
+          options.aiCheck !== false &&
+          (formData.message || "").trim()
+        ) {
+          const verdict = await requestAiVerdict(
+            env.SPAM_CHECK,
+            buildAiCheckPayload({
+              site: siteName,
+              formName,
+              submittedAt,
+              formData: stripMetaFields(formData, auxNames),
+              phoneLocale: options.phoneLocale ?? "nanp",
+              assessment: spamAssessment,
+            }),
+            options.aiTimeoutMs,
+          );
+          ({ assessment: spamAssessment, subjectPrefix } = applyAiVerdict(spamAssessment, verdict));
+          debugLog("ai check:", aiReason(verdict));
+        }
         if (spamAssessment.decision === "blocked") {
           debugLog("submission blocked (logged):", spamAssessment.reasons.join("; "));
         }
@@ -164,7 +188,7 @@ export function createSubmitFormHandler(
         await sendBrevoEmail(
           env.BREVO_API_KEY,
           to,
-          subject,
+          subjectPrefix + subject,
           html,
           options.sender ?? DEFAULT_SENDER,
         );

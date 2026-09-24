@@ -11,6 +11,11 @@ export interface SpamAssessment {
   score: number;
   reasons: string[];
   elapsedMs?: number;
+  /**
+   * Which layer produced the result: "gate" = bot checks (aux field, timing, rate limits),
+   * "content" = phrase / link / length / phone rules. Only content results go to the AI check.
+   */
+  stage?: "gate" | "content";
 }
 
 export interface EmailContent {
@@ -23,6 +28,8 @@ export interface SubmitFormEnv {
   BREVO_API_KEY: string;
   SITE_NAME: string;
   NOTIFICATION_EMAIL?: string;
+  /** Optional service binding to the lgx-spam-check Worker (AI spam check). */
+  SPAM_CHECK?: Fetcher;
 }
 
 export interface SubmissionContext {
@@ -60,6 +67,13 @@ export interface SubmitFormOptions {
   minFillMs?: number;
   /** Accumulated score that blocks. Default 3. */
   blockScoreAt?: number;
+  /**
+   * Ask the SPAM_CHECK Worker about messages that pass the bot gates. Default true
+   * (no-op when the binding is missing). The Worker decides shadow vs enforce per site.
+   */
+  aiCheck?: boolean;
+  /** Give up on the AI check after this long and keep the rules' decision. Default 4000. */
+  aiTimeoutMs?: number;
   debug?: boolean;
   sender?: { name: string; email: string };
 }

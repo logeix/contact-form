@@ -10,6 +10,8 @@ interface SubmitFormEnv {
     BREVO_API_KEY: string;
     SITE_NAME: string;
     NOTIFICATION_EMAIL?: string;
+    /** Optional service binding to the lgx-spam-check Worker (AI spam check). */
+    SPAM_CHECK?: Fetcher;
 }
 interface SubmissionContext {
     attribution: FormAttributionMeta | null;
@@ -41,6 +43,13 @@ interface SubmitFormOptions {
     minFillMs?: number;
     /** Accumulated score that blocks. Default 3. */
     blockScoreAt?: number;
+    /**
+     * Ask the SPAM_CHECK Worker about messages that pass the bot gates. Default true
+     * (no-op when the binding is missing). The Worker decides shadow vs enforce per site.
+     */
+    aiCheck?: boolean;
+    /** Give up on the AI check after this long and keep the rules' decision. Default 4000. */
+    aiTimeoutMs?: number;
     debug?: boolean;
     sender?: {
         name: string;
