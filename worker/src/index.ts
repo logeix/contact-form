@@ -154,9 +154,15 @@ export function buildState(req: CheckRequest): Record<string, string> {
   return state;
 }
 
-export function band(pSpam: number, blockAt: number, reviewAt: number): Verdict {
-  if (pSpam >= blockAt) return "block";
-  if (pSpam >= reviewAt) return "review";
+/**
+ * Only sales pitches get blocked. "Junk" is in practice people testing their own form, so it is
+ * delivered flagged for review instead of silently disappearing.
+ */
+export function band(probabilities: Record<string, number>, blockAt: number, reviewAt: number): Verdict {
+  const pitch = probabilities.sales_pitch ?? 0;
+  const spam = pitch + (probabilities.junk ?? 0);
+  if (pitch >= blockAt) return "block";
+  if (spam >= reviewAt) return "review";
   return "allow";
 }
 
@@ -277,7 +283,7 @@ export default {
       if (!env.OPENROUTER_JEV_KEY) throw new Error("missing_key");
       const jev = await askJev(env, buildState(req));
       const pSpam = SPAM_CHOICES.reduce((sum, key) => sum + (jev.probabilities[key] ?? 0), 0);
-      const verdict = band(pSpam, numberVar(env.BLOCK_AT, 0.85), numberVar(env.REVIEW_AT, 0.5));
+      const verdict = band(jev.probabilities, numberVar(env.BLOCK_AT, 0.85), numberVar(env.REVIEW_AT, 0.5));
       const latencyMs = Date.now() - started;
       if (!req.dryRun) ctx.waitUntil(logVerdict(env, req, { mode, verdict, pSpam, jev, latencyMs }));
       return json({

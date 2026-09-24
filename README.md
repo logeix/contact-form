@@ -203,6 +203,8 @@ The Worker decides per site what happens with its verdict:
 - **shadow** (default): the rules still decide; the verdict is only recorded, e.g. `ai-shadow:block:sales_pitch:0.97` in `spam_reasons`.
 - **enforce** (`MODE=enforce`, or the site listed in `ENFORCE_SITES`): the verdict replaces the content rules. `block` suppresses the email, `review` delivers it with a `[Possible spam] ` subject prefix, `allow` delivers it even if the rules would have blocked it.
 
+Verdicts: `block` when the sales-pitch probability is at least `BLOCK_AT` (0.85). `review` when sales pitch plus junk is at least `REVIEW_AT` (0.5). Otherwise `allow`. Junk alone never blocks, because in practice it is people testing their own form.
+
 If the Worker errors or times out, the rules' decision stands and `ai-error:<code>` is recorded. Only the message, short non-contact fields (for example `service`), the email domain, and whether the phone number looks valid are sent. Names, email addresses, and phone numbers stay on the site. The Worker's own D1 logs every verdict without message text.
 
 ## Publish (maintainers)

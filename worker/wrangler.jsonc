@@ -14,7 +14,7 @@
   "preview_urls": false,
   "observability": { "enabled": true },
   "vars": {
-    "MODE": "shadow",
+    "MODE": "enforce",
     "ENFORCE_SITES": "",
     "JEV_MODEL": "typesafe/jev-1.13",
     "BLOCK_AT": "0.85",
