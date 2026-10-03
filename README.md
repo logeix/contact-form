@@ -168,23 +168,26 @@ Hardcoded defaults, then per-site overrides:
 
 Phrase lists live in `src/server/terms.ts`. Bump the package to change them for every site.
 
+`assessFormNames` and `gateFormNames` together are the only forms the site accepts. A POST with any other `form-name`, or none, is logged as blocked (`unknown-form-name`) and never emailed. A site that keeps the endpoint but has no form can pass `assessFormNames: []` to accept nothing.
+
 ## Spam behaviour
 
 Runs in order. Immediate block → `score: 100`. Blocked rows still insert to D1 and return `{ success: true }` so bots cannot probe.
 
 Bot gates (plain code, always final):
 
-1. Aux field has a value (`honeypot-field-filled`)
-2. Missing / non-numeric / **negative** `submitted_at_client`
-3. Elapsed &lt; `minFillMs`
-4. ≥ 3 same IP in 10 min, ≥ 2 same email in 10 min
+1. `form-name` is not one of the site's forms (`unknown-form-name`; the stored name is cut to 64 characters)
+2. Aux field has a value (`honeypot-field-filled`)
+3. Missing / non-numeric / **negative** `submitted_at_client`
+4. Elapsed &lt; `minFillMs`
+5. ≥ 3 same IP in 10 min, ≥ 2 same email in 10 min
 
 Content rules (the AI check can overrule these when a site is enforced):
 
-5. URL in `message`
-6. Hard phrase
-7. Scored phrases, long message, many paragraphs, non-local phone
-8. Score ≥ `blockScoreAt`
+6. URL in `message`
+7. Hard phrase
+8. Scored phrases, long message, many paragraphs, non-local phone
+9. Score ≥ `blockScoreAt`
 
 ## AI spam check (optional)
 

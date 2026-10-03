@@ -26,6 +26,9 @@ export type {
 } from "./types";
 export type { FormAttributionMeta } from "../attribution";
 
+/** Scanners stuff payloads into `form-name`; keep only this much of an unknown one in D1. */
+const MAX_LOGGED_FORM_NAME = 64;
+
 export function isMissingMetaJsonColumn(error: unknown): boolean {
   const message = error instanceof Error ? error.message : String(error);
   return /no column named meta_json|has no column named meta_json/i.test(message);
@@ -37,6 +40,10 @@ export function createSubmitFormHandler(
   const debug = options.debug !== false;
   const assessFormNames = options.assessFormNames ?? ["contact"];
   const gateFormNames = options.gateFormNames ?? [];
+  // The site's forms are exactly the ones it assesses or gates. `form-name` comes from the
+  // client, so anything else is forged and must not reach the inbox unchecked.
+  const isKnownForm = (name: string) =>
+    assessFormNames.includes(name) || gateFormNames.includes(name);
 
   function debugLog(...args: unknown[]) {
     if (debug) console.log("[submit-form]", ...args);
@@ -51,7 +58,11 @@ export function createSubmitFormHandler(
         return jsonResponse({ error: "Unsupported content type" }, 400);
       }
 
-      const formName = formData[FORM_NAME_FIELD] || "unknown";
+      const rawFormName = formData[FORM_NAME_FIELD] || "";
+      const knownForm = isKnownForm(rawFormName);
+      const formName = knownForm
+        ? rawFormName
+        : rawFormName.slice(0, MAX_LOGGED_FORM_NAME) || "unknown";
       const siteName = env.SITE_NAME || "unknown";
       const auxNames = auxFieldNames(formData, options.extraHoneypotFields);
       const honeypotTriggered = auxFieldFilled(formData, auxNames);
@@ -63,7 +74,15 @@ export function createSubmitFormHandler(
       let spamAssessment: SpamAssessment = { decision: "allow", score: 0, reasons: [] };
       let subjectPrefix = "";
 
-      if (honeypotTriggered) {
+      if (!knownForm) {
+        spamAssessment = {
+          decision: "blocked",
+          score: 100,
+          reasons: ["unknown-form-name"],
+          stage: "gate",
+        };
+        debugLog("unknown form-name — logging row without email");
+      } else if (honeypotTriggered) {
         spamAssessment = {
           decision: "blocked",
           score: 100,
@@ -103,7 +122,7 @@ export function createSubmitFormHandler(
         if (spamAssessment.decision === "blocked") {
           debugLog("submission blocked (logged):", spamAssessment.reasons.join("; "));
         }
-      } else if (gateFormNames.includes(formName)) {
+      } else {
         spamAssessment = await assessFormSpam({
           db: env.DB,
           formData,
@@ -119,10 +138,6 @@ export function createSubmitFormHandler(
       const cleanFormData = stripMetaFields(formData, auxNames);
       const attribution = sanitizeFormAttribution(formData[ATTRIBUTION_FIELD]);
       const metaJson = attribution ? JSON.stringify(attribution) : null;
-      const recordSpam =
-        honeypotTriggered ||
-        assessFormNames.includes(formName) ||
-        gateFormNames.includes(formName);
 
       const insertBindings = [
           siteName,
@@ -131,10 +146,10 @@ export function createSubmitFormHandler(
           ipAddress,
           userAgent,
           JSON.stringify(cleanFormData),
-          recordSpam ? spamAssessment.decision : null,
-          recordSpam ? spamAssessment.score : null,
-          recordSpam ? JSON.stringify(spamAssessment.reasons) : null,
-          recordSpam ? (spamAssessment.elapsedMs ?? null) : null,
+          spamAssessment.decision,
+          spamAssessment.score,
+          JSON.stringify(spamAssessment.reasons),
+          spamAssessment.elapsedMs ?? null,
       ];
 
       let insertResult;

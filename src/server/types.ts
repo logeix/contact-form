@@ -56,7 +56,11 @@ export interface SubmitFormOptions {
    * Tagged `data-lgx-aux` fields are picked up automatically via `form_build`.
    */
   extraHoneypotFields?: string[];
-  /** Forms that get the full phrase / length / phone / rate-limit scoring. Default `["contact"]`. */
+  /**
+   * Forms that get the full phrase / length / phone / rate-limit scoring. Default `["contact"]`.
+   * With `gateFormNames`, the only form names accepted; anything else is blocked unemailed.
+   * Pass `[]` (and no gate forms) for a site with no form.
+   */
   assessFormNames?: string[];
   /**
    * Forms that get timing + aux only (no phrase lists).
